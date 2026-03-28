@@ -1,10 +1,71 @@
+<?php
+$dataFileCandidates = ["data.txt", "data/teplota.log"];
+$dataFilePath = null;
+
+foreach ($dataFileCandidates as $candidate) {
+    if (is_readable($candidate)) {
+        $dataFilePath = $candidate;
+        break;
+    }
+}
+
+$records = [];
+$temperatures = [];
+
+if ($dataFilePath !== null) {
+    $lines = file($dataFilePath, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+
+    foreach ($lines as $line) {
+        $parts = preg_split('/\s+/', trim($line));
+
+        if (count($parts) < 3) {
+            continue;
+        }
+
+        $tempRaw = str_replace(',', '.', $parts[0]);
+
+        if (!is_numeric($tempRaw)) {
+            continue;
+        }
+
+        $temp = (float)$tempRaw;
+        $date = $parts[1];
+        $time = $parts[2];
+
+        $records[] = [
+            "temp" => $temp,
+            "date" => $date,
+            "time" => $time,
+        ];
+
+        $temperatures[] = $temp;
+    }
+}
+
+$count = count($temperatures);
+$hasData = $count > 0;
+
+$avgTemp = $hasData ? (array_sum($temperatures) / $count) : null;
+$minTemp = $hasData ? min($temperatures) : null;
+$maxTemp = $hasData ? max($temperatures) : null;
+$currentTemp = $hasData ? $temperatures[$count - 1] : null;
+
+function formatTemp($value)
+{
+    if ($value === null) {
+        return "-";
+    }
+
+    return number_format((float)$value, 1, ',', ' ');
+}
+?>
 <!DOCTYPE html>
 <html lang="sk">
 
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="refresh" content="30; URL=http://127.0.0.1/korabsky_inv/korabsky_inv/teplota.php">
+    <meta http-equiv="refresh" content="30">
     <title>Internet vecí | Meranie teploty</title>
     <link rel="icon" type="image/x-icon" href="img/iot-favicon.ico">
     <link href="https://fonts.googleapis.com/css?family=Open+Sans:300,400" rel="stylesheet" /> <!-- https://fonts.google.com/ -->
@@ -50,62 +111,20 @@
                         </div>
                     </nav>
 
-                    <?php
-                    $subor = file("data.txt");
-                    ?>
-
-
-                    <?php
-
-
-                    $maxTeplota = explode(" ", max($subor));
-                    $minTeplota = explode(" ", min($subor));
-                    $aktTeplota = explode(" ", $subor[count($subor) - 1]);
-
-
-                    ?>
-
                 </div>
             </div>
 
             <div class="tm-row">
                 <div class="tm-col-left">
-                    <div class="pozadie-teploty" <p style="
-                                  text-transform: uppercase;
-                                  margin-top: 2rem;
-                                  font-size: 1.4rem;
-                                  ">Priemerná Teplota:
-                        <?=
-                        ($minTeplota[0] + $maxTeplota[0] / 2);
-                        ?>
-                        °C</p>
+                    <div class="pozadie-teploty">
+                        <p class="temperature-stat">Priemerná teplota: <?= formatTemp($avgTemp); ?> °C</p>
+                        <p class="temperature-stat">Aktuálna teplota: <?= formatTemp($currentTemp); ?> °C</p>
+                        <p class="temperature-stat">Maximálna teplota: <?= formatTemp($maxTemp); ?> °C</p>
+                        <p class="temperature-stat">Minimálna teplota: <?= formatTemp($minTemp); ?> °C</p>
 
-                        <p style="
-                                  text-transform: uppercase;
-                                  font-size: 1.4rem;
-                                  ">Aktuálna Teplota:
-                            <?=
-                            $aktTeplota[0];
-                            ?>
-                            °C</p>
-
-                        <p style="
-                                  text-transform: uppercase;
-                                  font-size: 1.4rem;
-                                  ">Maximálna Teplota:
-                            <?=
-                            $maxTeplota[0];
-                            ?>
-                            °C</p>
-
-                        <p style="
-                                  text-transform: uppercase;
-                                  font-size: 1.4rem;
-                                  ">Minimálna Teplota:
-                            <?=
-                            $minTeplota[0];
-                            ?>
-                            °C</p>
+                        <?php if (!$hasData): ?>
+                            <p class="temperature-help">Zatiaľ nemáš žiadne merania. Pošli prvé dáta z ESP32-C6.</p>
+                        <?php endif; ?>
                     </div>
                 </div>
 
@@ -118,20 +137,23 @@
                         </tr>
                     </thead>
                     <tbody>
+                        <?php if (!$hasData): ?>
+                            <tr>
+                                <td colspan="3">Žiadne dáta na zobrazenie.</td>
+                            </tr>
+                        <?php else: ?>
+                            <?php
+                            $lastRecords = array_slice($records, -20);
+                            foreach ($lastRecords as $record):
+                            ?>
+                                <tr>
+                                    <td><?= htmlspecialchars(formatTemp($record["temp"]), ENT_QUOTES, 'UTF-8'); ?> °C</td>
+                                    <td><?= htmlspecialchars($record["date"], ENT_QUOTES, 'UTF-8'); ?></td>
+                                    <td><?= htmlspecialchars($record["time"], ENT_QUOTES, 'UTF-8'); ?></td>
+                                </tr>
+                            <?php endforeach; ?>
+                        <?php endif; ?>
                     </tbody>
-
-                    <?php
-                    for ($i = max(0, count($subor) - 20); $i < count($subor); $i++) {
-                        $data = explode(" ", $subor[$i]);
-
-                        echo ("<tr>");
-                        foreach ($data as $x) {
-                            echo ("<td>" . $x . "°C" . "</td>");
-                        }
-                        echo ("</tr>");
-                    }
-                    ?>
-
                 </table>
             </div>
         </div>
